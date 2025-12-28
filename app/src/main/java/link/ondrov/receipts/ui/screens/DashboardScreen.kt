@@ -30,7 +30,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import link.ondrov.receipts.ui.theme.ReceiptsTheme
 import link.ondrov.receipts.data.model.ReceiptWithDetails
 import link.ondrov.receipts.ui.viewmodels.DashboardViewModel
-import java.text.NumberFormat
 import java.util.Calendar
 import java.util.Locale
 import android.app.Activity
@@ -47,6 +46,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import link.ondrov.receipts.util.FileUtils
+import link.ondrov.receipts.ui.utils.CurrencyUtils
 
 // 1. The "Connector"
 @Composable
@@ -116,11 +116,13 @@ fun DashboardContent(
     onReceiptClick: (String) -> Unit,
     onScanClick: () -> Unit
 ) {
-    // 1. Pure Visual Calculations (No filtering logic here!)
-    // These now operate on the list provided by the ViewModel.
-    val totalSpending = remember(receipts) { receipts.sumOf { it.receipt.totalAmount } }
+    val totalSpending = remember(receipts) {
+        receipts.sumOf {
+            CurrencyUtils.toEur(it.receipt.totalAmount, it.receipt.currency)
+        }
+    }
     val receiptCount = remember(receipts) { receipts.size }
-    val recentTransactions = remember(receipts) { receipts.take(5) }
+    val recentTransactions = remember(receipts) { receipts }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -211,7 +213,7 @@ fun DashboardContent(
                 items(recentTransactions) { receipt ->
                     TransactionItem(
                         details = receipt,
-                        onClick = { onReceiptClick(receipt.receipt.id) } // <--- CONNECT CLICK
+                        onClick = { onReceiptClick(receipt.receipt.id) }
                     )
                 }
             }
@@ -285,7 +287,7 @@ fun SummaryRow(
         StatCard(
             modifier = Modifier.weight(1f),
             title = "Total Spending",
-            value = formatCurrency(totalSpending)
+            value = CurrencyUtils.formatEur(totalSpending),
         )
         StatCard(
             modifier = Modifier.weight(1f),
@@ -362,7 +364,9 @@ fun SpendingTrendsCard(
                     // If first day is Mon (2) and current day is Sun (1) -> index 6
                     val index = (dayConstant - cal.firstDayOfWeek + 7) % 7
 
-                    if (index in 0..6) buckets[index] += it.receipt.totalAmount
+                    val amountInEur = CurrencyUtils.toEur(it.receipt.totalAmount, it.receipt.currency)
+
+                    if (index in 0..6) buckets[index] += amountInEur
                 }
 
                 Pair(buckets.toList(), "${dateFormat.format(start)} - ${dateFormat.format(end)}")
@@ -394,7 +398,7 @@ fun SpendingTrendsCard(
                 val start = cal.timeInMillis
                 cal.set(Calendar.MONTH, 11)
                 cal.set(Calendar.DAY_OF_MONTH, 31)
-                val end = cal.timeInMillis
+                cal.timeInMillis
 
                 receipts.forEach {
                     cal.timeInMillis = it.receipt.dateTimestamp
@@ -431,8 +435,9 @@ fun SpendingTrendsCard(
         }
     }
 
-    val periodTotal = receipts.sumOf { it.receipt.totalAmount }
-
+    val periodTotal = receipts.sumOf {
+        CurrencyUtils.toEur(it.receipt.totalAmount, it.receipt.currency)
+    }
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
@@ -444,7 +449,7 @@ fun SpendingTrendsCard(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                formatCurrency(periodTotal),
+                CurrencyUtils.formatEur(periodTotal),
                 style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
                 color = MaterialTheme.colorScheme.onSurface
             )
@@ -554,8 +559,9 @@ fun SpendingTrendsCard(
 
 @Composable
 fun CategoryBreakdownCard(receipts: List<ReceiptWithDetails>) {
-    val totalAmount = receipts.sumOf { it.receipt.totalAmount }
-
+    val totalAmount = receipts.sumOf {
+        CurrencyUtils.toEur(it.receipt.totalAmount, it.receipt.currency)
+    }
     val themePalette = listOf(
         MaterialTheme.colorScheme.primary,
         MaterialTheme.colorScheme.secondary,
@@ -568,7 +574,9 @@ fun CategoryBreakdownCard(receipts: List<ReceiptWithDetails>) {
     val categoryStats = remember(receipts) {
         val grouped = receipts.groupBy { it.category }
         val result = grouped.map { (category, receiptsList) ->
-            val sum = receiptsList.sumOf { it.receipt.totalAmount }
+            val sum = receiptsList.sumOf {
+                CurrencyUtils.toEur(it.receipt.totalAmount, it.receipt.currency)
+            }
             val name = category?.name ?: "Uncategorized"
             Triple(name, sum, Color.Transparent)
         }
@@ -664,8 +672,7 @@ fun CategoryBreakdownCard(receipts: List<ReceiptWithDetails>) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text("Total", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Text(
-                                formatCurrency(totalAmount, 0),
-                                fontSize = 20.sp,
+                                CurrencyUtils.formatEur(totalAmount),                                fontSize = 20.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
@@ -724,10 +731,10 @@ fun LegendItem(color: Color, label: String, pct: String) {
 @Composable
 fun TransactionItem(
     details: ReceiptWithDetails,
-    onClick: () -> Unit // <--- ADD THIS
+    onClick: () -> Unit
 ) {
     val dateString = remember(details.receipt.dateTimestamp) {
-        java.text.SimpleDateFormat("MMM dd, h:mm a", java.util.Locale.getDefault())
+        java.text.SimpleDateFormat("MMM dd, h:mm a", Locale.getDefault())
             .format(java.util.Date(details.receipt.dateTimestamp))
     }
 
@@ -772,17 +779,11 @@ fun TransactionItem(
         }
 
         Text(
-            text = formatCurrency(details.receipt.totalAmount),
+            text = "${details.receipt.totalAmount} ${details.receipt.currency}",
             style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
             color = MaterialTheme.colorScheme.onSurface
         )
     }
-}
-
-fun formatCurrency(amount: Double, fractionDigits: Int = 2): String {
-    val format = NumberFormat.getCurrencyInstance(Locale.US)
-    format.maximumFractionDigits = fractionDigits
-    return format.format(amount)
 }
 
 @Preview(showBackground = true)
@@ -825,19 +826,19 @@ fun DashboardPreview() {
         val (selectedFilter, setFilter) = remember { mutableStateOf("This Week") }
 
         val filteredPreviewData = remember(selectedFilter) {
-            val cal = java.util.Calendar.getInstance()
-            cal.firstDayOfWeek = java.util.Calendar.MONDAY
+            val cal = Calendar.getInstance()
+            cal.firstDayOfWeek = Calendar.MONDAY
 
             // Reset to start of today
-            cal.set(java.util.Calendar.HOUR_OF_DAY, 0)
-            cal.set(java.util.Calendar.MINUTE, 0)
-            cal.set(java.util.Calendar.SECOND, 0)
-            cal.set(java.util.Calendar.MILLISECOND, 0)
+            cal.set(Calendar.HOUR_OF_DAY, 0)
+            cal.set(Calendar.MINUTE, 0)
+            cal.set(Calendar.SECOND, 0)
+            cal.set(Calendar.MILLISECOND, 0)
 
             when (selectedFilter) {
-                "This Week" -> cal.set(java.util.Calendar.DAY_OF_WEEK, java.util.Calendar.MONDAY)
-                "This Month" -> cal.set(java.util.Calendar.DAY_OF_MONTH, 1)
-                "This Year" -> cal.set(java.util.Calendar.DAY_OF_YEAR, 1)
+                "This Week" -> cal.set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
+                "This Month" -> cal.set(Calendar.DAY_OF_MONTH, 1)
+                "This Year" -> cal.set(Calendar.DAY_OF_YEAR, 1)
                 // "All Time" doesn't need a start time
             }
 

@@ -1,0 +1,29 @@
+package link.ondrov.receipts.ui.utils
+
+import java.text.NumberFormat
+import java.util.Locale
+
+object CurrencyUtils {
+
+    // Exchange rates relative to 1 EUR
+    private val rates = mapOf(
+        "EUR" to 1.0,
+        "USD" to 0.92,  // 1 USD = 0.92 EUR
+        "CZK" to 0.04,  // 1 CZK = 0.04 EUR
+        "GBP" to 1.17,  // 1 GBP = 1.17 EUR
+        "PLN" to 0.23   // 1 PLN = 0.23 EUR
+    )
+
+    fun toEur(amount: Double, currencyCode: String): Double {
+        val code = currencyCode.uppercase()
+        // Default to 1.0 conversion (assume EUR) if code not found
+        val rate = rates[code] ?: 1.0
+        return amount * rate
+    }
+
+    fun formatEur(amount: Double): String {
+        val format = NumberFormat.getCurrencyInstance(Locale.GERMANY)
+        format.currency = java.util.Currency.getInstance("EUR")
+        return format.format(amount)
+    }
+}
