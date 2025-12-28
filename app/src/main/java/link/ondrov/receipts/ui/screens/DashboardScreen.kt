@@ -23,21 +23,17 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import link.ondrov.receipts.ui.theme.ReceiptsTheme
-import link.ondrov.receipts.data.model.ReceiptWithDetails
 import link.ondrov.receipts.ui.viewmodels.DashboardViewModel
-import java.util.Calendar
-import java.util.Locale
 import android.app.Activity
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.net.toUri
 import com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanning
@@ -45,10 +41,12 @@ import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import link.ondrov.receipts.ui.theme.ReceiptsTheme
 import link.ondrov.receipts.util.FileUtils
-import link.ondrov.receipts.ui.utils.CurrencyUtils
+import link.ondrov.receipts.ui.viewmodels.CategoryUiData
+import link.ondrov.receipts.ui.viewmodels.DashboardUiState
+import link.ondrov.receipts.ui.viewmodels.TransactionUiData
 
-// 1. The "Connector"
 @Composable
 fun DashboardScreen(
     onOpenReceipts: () -> Unit,
@@ -56,8 +54,7 @@ fun DashboardScreen(
     onNewScan: (String, String) -> Unit,
     viewModel: DashboardViewModel = viewModel(factory = DashboardViewModel.Factory)
 ) {
-    // Collect the computed/filtered results directly
-    val receipts by viewModel.filteredReceipts.collectAsState()
+    val state by viewModel.uiState.collectAsState()
     val currentFilter by viewModel.selectedFilter.collectAsState()
 
     val context = LocalContext.current
@@ -94,11 +91,11 @@ fun DashboardScreen(
     }
 
     DashboardContent(
-        receipts = receipts,
-        selectedFilter = currentFilter, // Pass state down
-        onFilterSelected = viewModel::onFilterSelected, // Pass event up
+        state = state,
+        selectedFilter = currentFilter,
+        onFilterSelected = viewModel::onFilterSelected,
         onOpenReceipts = onOpenReceipts,
-        onReceiptClick = onReceiptClick, // <--- PASS DOWN
+        onReceiptClick = onReceiptClick,
         onScanClick = {
             scanner.getStartScanIntent(context as Activity)
                 .addOnSuccessListener { scannerLauncher.launch(IntentSenderRequest.Builder(it).build()) }
@@ -106,24 +103,15 @@ fun DashboardScreen(
     )
 }
 
-// 2. The "UI Renderer"
 @Composable
 fun DashboardContent(
-    receipts: List<ReceiptWithDetails>, // Already filtered by ViewModel
-    selectedFilter: String,             // Current filter state from ViewModel
-    onFilterSelected: (String) -> Unit, // Callback to ViewModel
+    state: DashboardUiState,
+    selectedFilter: String,
+    onFilterSelected: (String) -> Unit,
     onOpenReceipts: () -> Unit,
     onReceiptClick: (String) -> Unit,
     onScanClick: () -> Unit
 ) {
-    val totalSpending = remember(receipts) {
-        receipts.sumOf {
-            CurrencyUtils.toEur(it.receipt.totalAmount, it.receipt.currency)
-        }
-    }
-    val receiptCount = remember(receipts) { receipts.size }
-    val recentTransactions = remember(receipts) { receipts }
-
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         floatingActionButton = {
@@ -133,11 +121,7 @@ fun DashboardContent(
                 contentColor = MaterialTheme.colorScheme.onPrimary,
                 shape = RoundedCornerShape(28.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Outlined.QrCodeScanner,
-                    contentDescription = "Scan Receipt",
-                    modifier = Modifier.size(36.dp)
-                )
+                Icon(Icons.Outlined.QrCodeScanner, "Scan Receipt", Modifier.size(36.dp))
             }
         }
     ) { paddingValues ->
@@ -152,7 +136,7 @@ fun DashboardContent(
 
             item {
                 Text(
-                    text = "Dashboard",
+                    "Dashboard",
                     style = MaterialTheme.typography.headlineLarge.copy(
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onBackground
@@ -160,27 +144,33 @@ fun DashboardContent(
                 )
             }
 
-            // 2. Filter Section (Stateless)
-            // Just displays the selected string and fires the callback
             item {
-                FilterSection(
-                    selectedFilter = selectedFilter,
-                    onFilterSelected = onFilterSelected
+                FilterSection(selectedFilter, onFilterSelected)
+            }
+
+            item {
+                SummaryRow(state.totalSpendingFormatted, state.receiptCount)
+            }
+
+            item {
+                SpendingTrendsCard(
+                    graphData = state.graphData,
+                    timeLabel = state.dateRangeLabel,
+                    totalFormatted = state.totalSpendingFormatted
                 )
             }
 
-            item { SummaryRow(totalSpending, receiptCount) }
-
-            // 3. Components use the data directly
-            item { SpendingTrendsCard(receipts, selectedFilter) }
-
-            item { CategoryBreakdownCard(receipts) }
+            item {
+                CategoryBreakdownCard(
+                    breakdown = state.categoryBreakdown,
+                    totalFormatted = state.totalSpendingFormatted
+                )
+            }
 
             item {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 10.dp)
                         .clip(RoundedCornerShape(12.dp))
                         .clickable { onOpenReceipts() }
                         .padding(vertical = 8.dp),
@@ -188,32 +178,28 @@ fun DashboardContent(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Transactions ($selectedFilter)",
+                        "Transactions ($selectedFilter)",
                         style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.onBackground,
                     )
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                        contentDescription = "Go to Receipts",
-                        tint = MaterialTheme.colorScheme.primary
-                    )
+                    Icon(Icons.AutoMirrored.Filled.ArrowForward, "Go to Receipts", tint = MaterialTheme.colorScheme.primary)
                 }
             }
 
-            if (recentTransactions.isEmpty()) {
+            if (state.recentTransactions.isEmpty()) {
                 item {
                     Text(
-                        "No transactions found for this period.",
+                        "No transactions found.",
                         modifier = Modifier.padding(vertical = 20.dp),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             } else {
-                items(recentTransactions) { receipt ->
+                items(state.recentTransactions) { transaction ->
                     TransactionItem(
-                        details = receipt,
-                        onClick = { onReceiptClick(receipt.receipt.id) }
+                        item = transaction,
+                        onClick = { onReceiptClick(transaction.id) }
                     )
                 }
             }
@@ -277,23 +263,15 @@ fun FilterSection(
 
 @Composable
 fun SummaryRow(
-    totalSpending: Double,
+    totalSpending: String,
     receiptCount: Int
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        StatCard(
-            modifier = Modifier.weight(1f),
-            title = "Total Spending",
-            value = CurrencyUtils.formatEur(totalSpending),
-        )
-        StatCard(
-            modifier = Modifier.weight(1f),
-            title = "Receipts Scanned",
-            value = receiptCount.toString()
-        )
+        StatCard(Modifier.weight(1f), "Total Spending", totalSpending)
+        StatCard(Modifier.weight(1f), "Receipts Scanned", receiptCount.toString())
     }
 }
 
@@ -323,121 +301,15 @@ fun StatCard(modifier: Modifier = Modifier, title: String, value: String) {
 
 @Composable
 fun SpendingTrendsCard(
-    receipts: List<ReceiptWithDetails>,
-    timeLabel: String
+    graphData: List<Double>,
+    timeLabel: String,
+    totalFormatted: String
 ) {
     val graphColor = MaterialTheme.colorScheme.primary
     val graphFillColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
     val cardBg = MaterialTheme.colorScheme.surfaceContainerHigh
     val textColor = MaterialTheme.colorScheme.onSurfaceVariant
 
-    // 1. Determine Date Range and Data Points based on Filter
-    val (chartData, dateRangeLabel) = remember(receipts, timeLabel) {
-        val cal = Calendar.getInstance()
-        val now = System.currentTimeMillis()
-
-        // Helper to format dates
-        val dateFormat = java.text.SimpleDateFormat("MMM dd", Locale.US)
-        val yearFormat = java.text.SimpleDateFormat("yyyy", Locale.US)
-
-        when (timeLabel) {
-            "This Week" -> {
-                // Logic: 7 Days (Sun-Sat or Mon-Sun depending on locale, simplifying to last 7 days from filter)
-                // Assuming filteredReceipts already contains only this week's data.
-                // We map them to 7 buckets (Day of Week)
-                val buckets = DoubleArray(7)
-
-                cal.firstDayOfWeek = Calendar.MONDAY
-                cal.timeInMillis = now
-                cal.set(Calendar.DAY_OF_WEEK, cal.firstDayOfWeek)
-                val start = cal.timeInMillis
-                cal.add(Calendar.DAY_OF_WEEK, 6)
-                val end = cal.timeInMillis
-
-                receipts.forEach {
-                    val rCal = Calendar.getInstance()
-                    rCal.timeInMillis = it.receipt.dateTimestamp
-                    val dayConstant = rCal.get(Calendar.DAY_OF_WEEK) // e.g., Sunday = 1, Monday = 2
-
-                    // 2. LOGIC: Dynamic mapping based on your setting above
-                    // If first day is Mon (2) and current day is Mon (2) -> index 0
-                    // If first day is Mon (2) and current day is Sun (1) -> index 6
-                    val index = (dayConstant - cal.firstDayOfWeek + 7) % 7
-
-                    val amountInEur = CurrencyUtils.toEur(it.receipt.totalAmount, it.receipt.currency)
-
-                    if (index in 0..6) buckets[index] += amountInEur
-                }
-
-                Pair(buckets.toList(), "${dateFormat.format(start)} - ${dateFormat.format(end)}")
-            }
-            "This Month" -> {
-                // Logic: Days in Month (1..31)
-                cal.timeInMillis = now
-                val maxDays = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
-                val buckets = DoubleArray(maxDays)
-
-                cal.set(Calendar.DAY_OF_MONTH, 1)
-                val start = cal.timeInMillis
-                cal.set(Calendar.DAY_OF_MONTH, maxDays)
-                val end = cal.timeInMillis
-
-                receipts.forEach {
-                    cal.timeInMillis = it.receipt.dateTimestamp
-                    val day = cal.get(Calendar.DAY_OF_MONTH) // 1..31
-                    if (day - 1 in buckets.indices) buckets[day - 1] += it.receipt.totalAmount
-                }
-
-                Pair(buckets.toList(), "${dateFormat.format(start)} - ${dateFormat.format(end)}")
-            }
-            "This Year" -> {
-                // Logic: 12 Months
-                val buckets = DoubleArray(12)
-                cal.timeInMillis = now
-                cal.set(Calendar.DAY_OF_YEAR, 1)
-                val start = cal.timeInMillis
-                cal.set(Calendar.MONTH, 11)
-                cal.set(Calendar.DAY_OF_MONTH, 31)
-                cal.timeInMillis
-
-                receipts.forEach {
-                    cal.timeInMillis = it.receipt.dateTimestamp
-                    val month = cal.get(Calendar.MONTH) // 0..11
-                    if (month in 0..11) buckets[month] += it.receipt.totalAmount
-                }
-
-                Pair(buckets.toList(), "${yearFormat.format(start)}")
-            }
-            else -> { // "All Time"
-                // Group by Year. Find min and max year in data.
-                if (receipts.isEmpty()) {
-                    Pair(listOf(0.0), "No Data")
-                } else {
-                    val minTs = receipts.minOf { it.receipt.dateTimestamp }
-                    val maxTs = receipts.maxOf { it.receipt.dateTimestamp }
-
-                    cal.timeInMillis = minTs
-                    val minYear = cal.get(Calendar.YEAR)
-                    cal.timeInMillis = maxTs
-                    val maxYear = cal.get(Calendar.YEAR)
-
-                    val span = maxYear - minYear + 1
-                    val buckets = DoubleArray(span) { 0.0 }
-
-                    receipts.forEach {
-                        cal.timeInMillis = it.receipt.dateTimestamp
-                        val y = cal.get(Calendar.YEAR)
-                        buckets[y - minYear] += it.receipt.totalAmount
-                    }
-                    Pair(buckets.toList(), "${yearFormat.format(minTs)} - ${yearFormat.format(maxTs)}")
-                }
-            }
-        }
-    }
-
-    val periodTotal = receipts.sumOf {
-        CurrencyUtils.toEur(it.receipt.totalAmount, it.receipt.currency)
-    }
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
@@ -447,72 +319,39 @@ fun SpendingTrendsCard(
         Column(modifier = Modifier.padding(24.dp)) {
             Text("Spending Trends", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onSurface)
             Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                CurrencyUtils.formatEur(periodTotal),
-                style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onSurface
-            )
-
-            // Label for the Period
+            Text(totalFormatted, style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onSurface)
             Text(timeLabel, style = MaterialTheme.typography.bodyMedium, color = textColor)
-
             Spacer(modifier = Modifier.height(24.dp))
 
-            // --- Dynamic Graph ---
-            Box(
-                modifier = Modifier.fillMaxWidth().height(120.dp)
-            ) {
-                if (periodTotal == 0.0) {
-                    Text("No data for this period", modifier = Modifier.align(Alignment.Center), style = MaterialTheme.typography.bodySmall)
+            Box(modifier = Modifier.fillMaxWidth().height(120.dp)) {
+                if (graphData.all { it == 0.0 }) {
+                    Text("No data", Modifier.align(Alignment.Center), style = MaterialTheme.typography.bodySmall)
                 } else {
                     Canvas(modifier = Modifier.fillMaxSize()) {
                         val width = size.width
                         val height = size.height
-
-                        // Avoid flatline if all values are 0 or equal
-                        val maxVal = (chartData.maxOrNull() ?: 1.0) * 1.2
-                        // Ensure we don't divide by 0 if maxVal is 0
+                        val maxVal = (graphData.maxOrNull() ?: 1.0) * 1.2
                         val safeMax = if (maxVal == 0.0) 1.0 else maxVal
-
-                        val pointsCount = chartData.size
-                        // If we only have 1 point (e.g. 1 year of data), we can't draw a curve.
-                        // We need at least 2 points for a line.
-                        val stepX = if (pointsCount > 1) width / (pointsCount - 1) else width
-
+                        val stepX = if (graphData.size > 1) width / (graphData.size - 1) else width
                         val path = Path()
 
-                        // Calculate starting Y
-                        val firstY = height - ((chartData.firstOrNull() ?: 0.0) / safeMax * height).toFloat()
+                        val firstY = height - ((graphData.firstOrNull() ?: 0.0) / safeMax * height).toFloat()
                         path.moveTo(0f, firstY)
 
-                        if (pointsCount > 1) {
-                            for (i in 0 until pointsCount - 1) {
+                        if (graphData.size > 1) {
+                            for (i in 0 until graphData.size - 1) {
                                 val p1x = i * stepX
-                                val p1y = height - ((chartData[i] / safeMax) * height).toFloat()
+                                val p1y = height - ((graphData[i] / safeMax) * height).toFloat()
                                 val p2x = (i + 1) * stepX
-                                val p2y = height - ((chartData[i + 1] / safeMax) * height).toFloat()
-
-                                // Cubic Bezier for smooth curve
+                                val p2y = height - ((graphData[i + 1] / safeMax) * height).toFloat()
                                 val cx1 = (p1x + p2x) / 2
-                                val cy1 = p1y
-                                val cx2 = (p1x + p2x) / 2
-                                val cy2 = p2y
-                                path.cubicTo(cx1, cy1, cx2, cy2, p2x, p2y)
+                                path.cubicTo(cx1, p1y, cx1, p2y, p2x, p2y)
                             }
                         } else {
-                            // Single point case: just draw a line across
                             path.lineTo(width, firstY)
                         }
 
-                        // Draw Fill
-                        val fillPath = Path().apply {
-                            addPath(path)
-                            lineTo(width, height)
-                            lineTo(0f, height)
-                            close()
-                        }
-
+                        val fillPath = Path().apply { addPath(path); lineTo(width, height); lineTo(0f, height); close() }
                         drawPath(
                             path = fillPath,
                             brush = Brush.verticalGradient(
@@ -522,7 +361,6 @@ fun SpendingTrendsCard(
                             )
                         )
 
-                        // Draw Stroke
                         drawPath(
                             path = path,
                             color = graphColor,
@@ -531,37 +369,21 @@ fun SpendingTrendsCard(
                     }
                 }
             }
-
             Spacer(modifier = Modifier.height(16.dp))
-
-            // --- Date Range Label (Bottom) ---
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.DateRange, // Requires androidx.compose.material.icons.filled.DateRange
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = dateRangeLabel,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontWeight = FontWeight.Medium
-                )
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                Icon(Icons.Default.DateRange, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.width(4.dp))
+                Text(timeLabel, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Medium)
             }
         }
     }
 }
 
 @Composable
-fun CategoryBreakdownCard(receipts: List<ReceiptWithDetails>) {
-    val totalAmount = receipts.sumOf {
-        CurrencyUtils.toEur(it.receipt.totalAmount, it.receipt.currency)
-    }
+fun CategoryBreakdownCard(
+    breakdown: List<CategoryUiData>,
+    totalFormatted: String
+) {
     val themePalette = listOf(
         MaterialTheme.colorScheme.primary,
         MaterialTheme.colorScheme.secondary,
@@ -570,46 +392,6 @@ fun CategoryBreakdownCard(receipts: List<ReceiptWithDetails>) {
         MaterialTheme.colorScheme.primaryContainer,
         MaterialTheme.colorScheme.secondaryContainer
     )
-
-    val categoryStats = remember(receipts) {
-        val grouped = receipts.groupBy { it.category }
-        val result = grouped.map { (category, receiptsList) ->
-            val sum = receiptsList.sumOf {
-                CurrencyUtils.toEur(it.receipt.totalAmount, it.receipt.currency)
-            }
-            val name = category?.name ?: "Uncategorized"
-            Triple(name, sum, Color.Transparent)
-        }
-
-        // Sort Descending
-        val sorted = result.sortedByDescending { it.second }
-
-        // --- NEW GROUPING LOGIC ---
-        // Thick rounded charts need ~6-7% minimum to look good.
-        // We group anything smaller than that into "Others".
-        val thresholdPercent = 0.07 // 7%
-        val minAmount = totalAmount * thresholdPercent
-
-        val (bigCategories, smallCategories) = sorted.partition { it.second >= minAmount }
-
-        val finalData = if (smallCategories.isNotEmpty()) {
-            val othersSum = smallCategories.sumOf { it.second }
-            // Only add "Others" if it has value
-            if (othersSum > 0) {
-                bigCategories + Triple("Others", othersSum, Color.Transparent)
-            } else {
-                bigCategories
-            }
-        } else {
-            sorted
-        }
-
-        // Apply Colors
-        finalData.mapIndexed { index, (name, sum, _) ->
-            val color = themePalette[index % themePalette.size]
-            Triple(name, sum, color)
-        }
-    }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -625,7 +407,7 @@ fun CategoryBreakdownCard(receipts: List<ReceiptWithDetails>) {
             )
             Spacer(modifier = Modifier.height(24.dp))
 
-            if (totalAmount == 0.0) {
+            if (breakdown.isEmpty()) {
                 Text("No spending data.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             } else {
                 Row(
@@ -641,24 +423,27 @@ fun CategoryBreakdownCard(receipts: List<ReceiptWithDetails>) {
                             val radius = (size.minDimension - strokeWidth) / 2
                             val circumference = (2 * Math.PI * radius).toFloat()
 
-                            // The cap adds half a stroke width on EACH end.
-                            // Total cap length = 1 stroke width.
+                            // The rounded cap adds half a stroke width on EACH end.
+                            // We need to account for this so colors don't overlap.
                             val strokeCapAngle = (strokeWidth / circumference) * 360f
                             val visualGapAngle = 4f
                             val totalGapAdjustment = strokeCapAngle + visualGapAngle
 
                             var currentStartAngle = -90f
 
-                            categoryStats.forEach { (_, amount, color) ->
-                                val sweepAngleFull = ((amount / totalAmount) * 360f).toFloat()
+                            breakdown.forEach { item ->
+                                // Convert percentage (0.0 - 1.0) to degrees
+                                val sweepAngleFull = item.percentage * 360f
 
-                                // Only draw if the slice is visually large enough to support the rounded caps
+                                // Only draw if the slice is large enough to support the rounded caps and gap
                                 if (sweepAngleFull > totalGapAdjustment) {
                                     val drawSweep = sweepAngleFull - totalGapAdjustment
+
+                                    // Offset the start so the gap is centered
                                     val startOffset = (visualGapAngle / 2f) + (strokeCapAngle / 2f)
 
                                     drawArc(
-                                        color = color,
+                                        color = themePalette[item.colorIndex % themePalette.size],
                                         startAngle = currentStartAngle + startOffset,
                                         sweepAngle = drawSweep,
                                         useCenter = false,
@@ -672,7 +457,8 @@ fun CategoryBreakdownCard(receipts: List<ReceiptWithDetails>) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text("Total", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Text(
-                                CurrencyUtils.formatEur(totalAmount),                                fontSize = 20.sp,
+                                totalFormatted,
+                                fontSize = 20.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
@@ -682,14 +468,11 @@ fun CategoryBreakdownCard(receipts: List<ReceiptWithDetails>) {
                     Spacer(modifier = Modifier.width(24.dp))
 
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        categoryStats.forEach { (name, amount, color) ->
-                            val percentage = (amount / totalAmount) * 100
-                            // Round to 1 decimal place if needed, or Int
-                            val pctString = if (percentage < 1) "<1%" else "${percentage.toInt()}%"
+                        breakdown.forEach { item ->
                             LegendItem(
-                                color = color,
-                                label = name,
-                                pct = pctString
+                                color = themePalette[item.colorIndex % themePalette.size],
+                                label = item.name,
+                                pct = "${(item.percentage * 100).toInt()}%"
                             )
                         }
                     }
@@ -698,6 +481,7 @@ fun CategoryBreakdownCard(receipts: List<ReceiptWithDetails>) {
         }
     }
 }
+
 @Composable
 fun LegendItem(color: Color, label: String, pct: String) {
     Row(
@@ -729,127 +513,96 @@ fun LegendItem(color: Color, label: String, pct: String) {
 }
 
 @Composable
-fun TransactionItem(
-    details: ReceiptWithDetails,
-    onClick: () -> Unit
-) {
-    val dateString = remember(details.receipt.dateTimestamp) {
-        java.text.SimpleDateFormat("MMM dd, h:mm a", Locale.getDefault())
-            .format(java.util.Date(details.receipt.dateTimestamp))
-    }
-
-    val iconVector = link.ondrov.receipts.ui.utils.IconRegistry.getIcon(details.category?.iconId ?: "qr_code")
-
+fun TransactionItem(item: TransactionUiData, onClick: () -> Unit) {
+    val iconVector = link.ondrov.receipts.ui.utils.IconRegistry.getIcon(item.iconId)
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .clickable { onClick() }
-            .padding(vertical = 8.dp),
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+            .clickable { onClick() }.padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
-            modifier = Modifier
-                .size(48.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.secondaryContainer),
+            modifier = Modifier.size(48.dp).clip(CircleShape).background(MaterialTheme.colorScheme.secondaryContainer),
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                imageVector = iconVector,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                modifier = Modifier.size(24.dp)
-            )
+            Icon(iconVector, null, tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(24.dp))
         }
-
-        Spacer(modifier = Modifier.width(16.dp))
-
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = details.receipt.storeName,
-                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = dateString,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+        Spacer(Modifier.width(16.dp))
+        Column(Modifier.weight(1f)) {
+            Text(item.storeName, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.onSurface)
+            Text(item.dateString, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-
-        Text(
-            text = "${details.receipt.totalAmount} ${details.receipt.currency}",
-            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
-            color = MaterialTheme.colorScheme.onSurface
-        )
+        Text(item.amountFormatted, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onSurface)
     }
 }
 
 @Preview(showBackground = true)
 @Composable
 fun DashboardPreview() {
-    // 1. Mock Categories
-    val previewCatGroceries = link.ondrov.receipts.data.model.Category("c1", "Groceries", "shopping_cart")
-    val previewCatTech = link.ondrov.receipts.data.model.Category("c2", "Tech", "tech")
-    val previewCatRandom = link.ondrov.receipts.data.model.Category("c3", "Random", "utilities")
-
-    // 2. Mock Data
-    // We use consistent offsets to ensure data appears in specific ranges
-    val now = System.currentTimeMillis()
-    val dayMillis = 24 * 60 * 60 * 1000L
-
-    val previewData = listOf(
-        // Today
-        ReceiptWithDetails(
-            receipt = link.ondrov.receipts.data.model.Receipt("1", "Preview Mart", 120.00, now, "USD", "c1", "img1", null),
-            category = previewCatGroceries,
-            items = emptyList()
-        ),
-        // 15 days ago (e.g., Nov 22) - Should NOT show in "This Week" or "This Month" (if Dec)
-        ReceiptWithDetails(
-            receipt = link.ondrov.receipts.data.model.Receipt("2", "Tech Store", 450.00, now - (15 * dayMillis), "USD", "c2", "img2", null),
-            category = previewCatTech,
-            items = emptyList()
-        ),
-        // 2 days ago (Shows in "This Week")
-        ReceiptWithDetails(
-            receipt = link.ondrov.receipts.data.model.Receipt("3", "Alza", 35.00, now - (2 * dayMillis), "USD", "c3", "img3", null),
-            category = previewCatRandom,
-            items = emptyList()
-        )
-    )
-
     ReceiptsTheme {
-        // 3. State Wrapper for Preview
-        // We replicate the filtering logic LOCALLY just for the preview
-        val (selectedFilter, setFilter) = remember { mutableStateOf("This Week") }
+        // 1. Create a Fake State to visualize
+        val mockState = DashboardUiState(
+            isLoading = false,
+            currencySymbol = "€",
+            totalSpendingFormatted = "€1,240.00", // Total converted to EUR
+            receiptCount = 12,
+            dateRangeLabel = "Dec 22 - Dec 28",
 
-        val filteredPreviewData = remember(selectedFilter) {
-            val cal = Calendar.getInstance()
-            cal.firstDayOfWeek = Calendar.MONDAY
+            // Fake Graph Data (7 points for "This Week")
+            graphData = listOf(10.0, 50.0, 20.0, 120.0, 80.0, 30.0, 60.0),
 
-            // Reset to start of today
-            cal.set(Calendar.HOUR_OF_DAY, 0)
-            cal.set(Calendar.MINUTE, 0)
-            cal.set(Calendar.SECOND, 0)
-            cal.set(Calendar.MILLISECOND, 0)
+            // Fake Categories
+            categoryBreakdown = listOf(
+                CategoryUiData(
+                    name = "Groceries",
+                    totalFormatted = "€600.00",
+                    percentage = 0.5f,
+                    colorIndex = 0
+                ),
+                CategoryUiData(
+                    name = "Tech",
+                    totalFormatted = "€400.00",
+                    percentage = 0.35f,
+                    colorIndex = 1
+                ),
+                CategoryUiData(
+                    name = "Utilities",
+                    totalFormatted = "€240.00",
+                    percentage = 0.15f,
+                    colorIndex = 2
+                )
+            ),
 
-            when (selectedFilter) {
-                "This Week" -> cal.set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
-                "This Month" -> cal.set(Calendar.DAY_OF_MONTH, 1)
-                "This Year" -> cal.set(Calendar.DAY_OF_YEAR, 1)
-                // "All Time" doesn't need a start time
-            }
+            // Fake Transactions (showing ORIGINAL currencies as requested)
+            recentTransactions = listOf(
+                TransactionUiData(
+                    id = "1",
+                    storeName = "Tesco",
+                    dateString = "Dec 28, 4:30 PM",
+                    amountFormatted = "€24.50",
+                    iconId = "shopping_cart"
+                ),
+                TransactionUiData(
+                    id = "2",
+                    storeName = "Alza",
+                    dateString = "Dec 27, 10:15 AM",
+                    amountFormatted = "1 200 Kč", // CZK example
+                    iconId = "tech"
+                ),
+                TransactionUiData(
+                    id = "3",
+                    storeName = "Starbucks",
+                    dateString = "Dec 26, 9:00 AM",
+                    amountFormatted = "$12.00", // USD example
+                    iconId = "utilities"
+                )
+            )
+        )
 
-            val startTime = if (selectedFilter == "All Time") 0L else cal.timeInMillis
-            previewData.filter { it.receipt.dateTimestamp >= startTime }
-        }
-
+        // 2. Render the "Dumb" View
         DashboardContent(
-            receipts = filteredPreviewData, // Pass the filtered list!
-            selectedFilter = selectedFilter,
-            onFilterSelected = setFilter,
+            state = mockState,
+            selectedFilter = "This Week",
+            onFilterSelected = {}, // No-op for preview
             onOpenReceipts = {},
             onReceiptClick = {},
             onScanClick = {}

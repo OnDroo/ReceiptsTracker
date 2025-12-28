@@ -26,4 +26,14 @@ object CurrencyUtils {
         format.currency = java.util.Currency.getInstance("EUR")
         return format.format(amount)
     }
+
+    fun format(amount: Double, currencyCode: String): String {
+        return try {
+            val format = NumberFormat.getCurrencyInstance(Locale.getDefault())
+            format.currency = java.util.Currency.getInstance(currencyCode)
+            format.format(amount)
+        } catch (e: Exception) {
+            "$amount $currencyCode"
+        }
+    }
 }
