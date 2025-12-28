@@ -1,0 +1,24 @@
+package link.ondrov.receipts.ui.navigation
+
+sealed class Screen(val route: String) {
+    data object Dashboard : Screen("dashboard")
+
+    object ReceiptDetails {
+        // Define the route with an OPTIONAL query parameter "?imageUri={imageUri}"
+        const val route = "receipt_detail/{receiptId}?imageUri={imageUri}"
+
+        // FIX: Add the second argument here with a default null value
+        fun createRoute(receiptId: String, imageUri: String? = null): String {
+            return if (imageUri != null) {
+                "receipt_detail/$receiptId?imageUri=$imageUri"
+            } else {
+                "receipt_detail/$receiptId"
+            }
+        }
+    }
+
+    object ReceiptEdit {
+        const val route = "receipt_edit/{receiptId}"
+        fun createRoute(receiptId: String) = "receipt_edit/$receiptId"
+    }
+}
