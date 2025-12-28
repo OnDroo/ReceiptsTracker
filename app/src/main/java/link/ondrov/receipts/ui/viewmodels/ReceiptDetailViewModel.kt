@@ -88,7 +88,7 @@ class ReceiptDetailViewModel(
     }
 
     private suspend fun analyzeReceiptWithGemini(imageFile: File) = withContext(Dispatchers.IO) {
-        val apiKey = ""
+        val apiKey = "AIzaSyAz4gI8lw10EbeCuMIVgjfon_o8uWk8LgI"
         val apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=$apiKey"
 
         // 2. Fetch Categories for Enum
@@ -105,7 +105,8 @@ class ReceiptDetailViewModel(
             Analyze this receipt. Extract data to match the JSON structure exactly.
             
             RULES:
-            1. Dates must be in format YYYY-MM-DD.
+            1. Date must be in format "YYYY-MM-DD HH:mm:ss". If time is missing on receipt, use "00:00:00".
+            2. Currency must be the 3-letter ISO 4217 code (e.g., EUR, USD, CZK, GBP). Infer from symbol or address.
             2. For 'items', price must be the TOTAL price for that line (qty * unit_price).
             3. Pick the single best category for this receipt from this list: [$categoryNames]. 
                Return the exact name in the 'categoryName' field.
@@ -121,8 +122,16 @@ class ReceiptDetailViewModel(
             put("properties", JSONObject().apply {
                 put("storeName", JSONObject().put("type", "STRING"))
                 put("totalAmount", JSONObject().put("type", "NUMBER"))
-                put("currency", JSONObject().put("type", "STRING"))
-                put("date", JSONObject().put("type", "STRING").put("description", "YYYY-MM-DD"))
+
+                put("currency", JSONObject().apply {
+                    put("type", "STRING")
+                    put("description", "ISO 4217 Code (e.g. EUR)")
+                })
+
+                put("date", JSONObject().apply {
+                    put("type", "STRING")
+                    put("description", "YYYY-MM-DD HH:mm:ss")
+                })
 
                 // CRITICAL: The enum forces the model to pick a valid category
                 put("categoryName", JSONObject().apply {
@@ -194,9 +203,13 @@ class ReceiptDetailViewModel(
             // Date Parsing
             val dateString = json.optString("date", "")
             val timestamp = try {
-                SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(dateString)?.time ?: System.currentTimeMillis()
-            } catch (e: Exception) {
-                System.currentTimeMillis()
+                SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).parse(dateString)?.time ?: System.currentTimeMillis()
+            } catch (_: Exception) {
+                try {
+                    SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(dateString)?.time ?: System.currentTimeMillis()
+                } catch (_: Exception) {
+                    System.currentTimeMillis()
+                }
             }
 
             // Category Mapping
@@ -214,7 +227,7 @@ class ReceiptDetailViewModel(
                     receiptId = id,
                     name = item.getString("name"),
                     quantity = item.optDouble("quantity", 1.0),
-                    unit = item.optString("unit", null),
+                    unit = item.optString("unit", ""),
                     price = item.getDouble("price")
                 )
             }
