@@ -1,6 +1,5 @@
-package link.ondrov.receipts.ui.screens
+package link.ondrov.receipts.ui.components
 
-import androidx.compose.animation.core.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
