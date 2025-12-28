@@ -66,7 +66,7 @@ fun AppNavigation() {
         // --- DASHBOARD ---
         composable(Screen.Dashboard.route) {
             DashboardRoute(
-                onOpenReceipts = { /* TODO: Open List */ },
+                onOpenReceipts = { navController.navigate(Screen.ReceiptList.route) },
                 onReceiptClick = { id ->
                     navController.navigate(Screen.ReceiptDetails.createRoute(id))
                 },
@@ -75,6 +75,20 @@ fun AppNavigation() {
                 },
                 onSettingsClick = {
                     navController.navigate(Screen.Settings.route)
+                }
+            )
+        }
+
+        // --- NEW RECEIPT LIST SCREEN ---
+        composable(
+            route = Screen.ReceiptList.route,
+            enterTransition = { slideInHorizontally { it } },
+            exitTransition = { slideOutHorizontally { it } }
+        ) {
+            link.ondrov.receipts.ui.screens.ReceiptListRoute(
+                onBack = { navController.popBackStack() },
+                onReceiptClick = { id ->
+                    navController.navigate(Screen.ReceiptDetails.createRoute(id))
                 }
             )
         }

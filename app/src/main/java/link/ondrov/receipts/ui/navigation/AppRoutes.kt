@@ -3,6 +3,7 @@ package link.ondrov.receipts.ui.navigation
 sealed class Screen(val route: String) {
     data object Dashboard : Screen("dashboard")
     data object Settings : Screen("settings")
+    data object ReceiptList : Screen("receipt_list")
 
     object ReceiptDetails {
         const val route = "receipt_detail/{receiptId}?imageUri={imageUri}"

@@ -1,5 +1,6 @@
 package link.ondrov.receipts.ui.viewmodels
 
+import android.app.Application
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
@@ -17,6 +18,7 @@ import link.ondrov.receipts.data.model.ReceiptWithDetails
 import link.ondrov.receipts.data.repository.ReceiptRepository
 import link.ondrov.receipts.data.repository.SettingsRepository
 import link.ondrov.receipts.ui.utils.CurrencyUtils
+import link.ondrov.receipts.util.DateUtils
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -50,10 +52,12 @@ data class TransactionUiData(
     val storeName: String,
     val dateString: String,
     val amountFormatted: String,
-    val iconId: String
+    val iconId: String,
+    val matchedItems: List<String> = emptyList()
 )
 
 class DashboardViewModel(
+    private val application: Application,
     private val repository: ReceiptRepository,
     private val settingsRepository: SettingsRepository
 ) : ViewModel() {
@@ -108,8 +112,7 @@ class DashboardViewModel(
             TransactionUiData(
                 id = item.receipt.id,
                 storeName = item.receipt.storeName,
-                dateString = SimpleDateFormat("MMM dd, h:mm a", Locale.getDefault())
-                    .format(java.util.Date(item.receipt.dateTimestamp)),
+                dateString = DateUtils.formatDateTime(application, item.receipt.dateTimestamp),
                 amountFormatted = CurrencyUtils.format(
                     item.receipt.totalAmount,
                     item.receipt.currency
@@ -283,6 +286,7 @@ class DashboardViewModel(
             initializer {
                 val application = (this[APPLICATION_KEY] as ReceiptApplication)
                 DashboardViewModel(
+                    application,
                     application.container.receiptRepository,
                     application.container.settingsRepository
                 )
