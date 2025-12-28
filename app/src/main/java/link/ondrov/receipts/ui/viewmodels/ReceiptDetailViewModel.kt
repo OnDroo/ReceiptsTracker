@@ -26,6 +26,7 @@ import link.ondrov.receipts.data.model.ReceiptItem
 import link.ondrov.receipts.data.model.ReceiptMetadata
 import link.ondrov.receipts.data.model.ReceiptWithDetails
 import link.ondrov.receipts.data.repository.ReceiptRepository
+import link.ondrov.receipts.data.repository.SettingsRepository
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
@@ -40,6 +41,7 @@ import java.util.UUID
 class ReceiptDetailViewModel(
     application: Application,
     private val receiptRepository: ReceiptRepository,
+    private val settingsRepository: SettingsRepository,
     savedStateHandle: SavedStateHandle
 ) : AndroidViewModel(application) {
 
@@ -88,7 +90,12 @@ class ReceiptDetailViewModel(
     }
 
     private suspend fun analyzeReceiptWithGemini(imageFile: File) = withContext(Dispatchers.IO) {
-        val apiKey = "AIzaSyAz4gI8lw10EbeCuMIVgjfon_o8uWk8LgI"
+        val apiKey = settingsRepository.apiKey.first()
+
+        if (apiKey.isBlank()) {
+            throw IOException("API Key is missing. Please set it in Settings.")
+        }
+
         val apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=$apiKey"
 
         // 2. Fetch Categories for Enum
@@ -262,7 +269,11 @@ class ReceiptDetailViewModel(
             initializer {
                 val app = (this[APPLICATION_KEY] as ReceiptApplication)
                 val handle = createSavedStateHandle()
-                ReceiptDetailViewModel(app, app.container.receiptRepository, handle)
+                ReceiptDetailViewModel(app,
+                    app.container.receiptRepository,
+                    app.container.settingsRepository,
+                    handle
+                )
             }
         }
     }

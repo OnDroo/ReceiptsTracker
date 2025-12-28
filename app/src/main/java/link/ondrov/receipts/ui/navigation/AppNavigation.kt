@@ -1,11 +1,9 @@
 package link.ondrov.receipts.ui.navigation
 
-import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -16,10 +14,10 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import link.ondrov.receipts.ui.screens.DashboardScreen
+import link.ondrov.receipts.ui.screens.DashboardRoute
 import link.ondrov.receipts.ui.screens.EditReceiptScreen
 import link.ondrov.receipts.ui.screens.ReceiptDetailScreen
-import link.ondrov.receipts.ui.viewmodels.DashboardViewModel
+import link.ondrov.receipts.ui.screens.SettingsScreen
 import link.ondrov.receipts.ui.viewmodels.ReceiptDetailViewModel
 
 @Composable
@@ -67,16 +65,34 @@ fun AppNavigation() {
     ) {
         // --- DASHBOARD ---
         composable(Screen.Dashboard.route) {
-            DashboardScreen(
+            DashboardRoute(
                 onOpenReceipts = { /* TODO: Open List */ },
                 onReceiptClick = { id ->
-                    // Standard navigation (viewing existing receipt)
                     navController.navigate(Screen.ReceiptDetails.createRoute(id))
                 },
                 onNewScan = { id, encodedUri ->
-                    // Scan navigation (passing the new image URI)
                     navController.navigate(Screen.ReceiptDetails.createRoute(id, encodedUri))
+                },
+                onSettingsClick = {
+                    navController.navigate(Screen.Settings.route)
                 }
+            )
+        }
+
+        // --- SETTINGS ---
+        composable(
+            route = Screen.Settings.route,
+            enterTransition = {
+                // Slide in from Right
+                slideInHorizontally(initialOffsetX = { it }, animationSpec = tween(400))
+            },
+            exitTransition = {
+                // Slide out to Right
+                slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween(400))
+            }
+        ) {
+            SettingsScreen(
+                onBack = { navController.popBackStack() }
             )
         }
 

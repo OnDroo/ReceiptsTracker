@@ -14,6 +14,15 @@ object CurrencyUtils {
         "PLN" to 0.23   // 1 PLN = 0.23 EUR
     )
 
+    private fun getRate(currency: String): Double {
+        return when (currency.uppercase()) {
+            "USD" -> 1.08 // Example: 1 EUR = 1.08 USD
+            "CZK" -> 25.3 // Example: 1 EUR = 25.3 CZK
+            "GBP" -> 0.85
+            else -> 1.0
+        }
+    }
+
     fun toEur(amount: Double, currencyCode: String): Double {
         val code = currencyCode.uppercase()
         // Default to 1.0 conversion (assume EUR) if code not found
@@ -34,6 +43,19 @@ object CurrencyUtils {
             format.format(amount)
         } catch (e: Exception) {
             "$amount $currencyCode"
+        }
+    }
+
+    fun convert(amount: Double, fromCurrency: String, toCurrency: String): Double {
+        if (fromCurrency.equals(toCurrency, ignoreCase = true)) return amount
+
+        val amountInEur = toEur(amount, fromCurrency)
+
+        return if (toCurrency.equals("EUR", ignoreCase = true)) {
+            amountInEur
+        } else {
+            val rate = getRate(toCurrency)
+            amountInEur * rate
         }
     }
 }

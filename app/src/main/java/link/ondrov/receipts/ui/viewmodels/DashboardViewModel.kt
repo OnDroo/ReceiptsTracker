@@ -15,6 +15,7 @@ import kotlinx.coroutines.launch
 import link.ondrov.receipts.ReceiptApplication
 import link.ondrov.receipts.data.model.ReceiptWithDetails
 import link.ondrov.receipts.data.repository.ReceiptRepository
+import link.ondrov.receipts.data.repository.SettingsRepository
 import link.ondrov.receipts.ui.utils.CurrencyUtils
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -53,12 +54,13 @@ data class TransactionUiData(
 )
 
 class DashboardViewModel(
-    private val repository: ReceiptRepository
+    private val repository: ReceiptRepository,
+    private val settingsRepository: SettingsRepository
 ) : ViewModel() {
     private val _allReceipts = MutableStateFlow<List<ReceiptWithDetails>>(emptyList())
     private val _selectedFilter = MutableStateFlow("This Week")
 
-    private val _targetCurrency = MutableStateFlow("EUR")
+    private val _targetCurrency = settingsRepository.currency
 
     val uiState: StateFlow<DashboardUiState> = combine(
         _allReceipts,
@@ -89,20 +91,16 @@ class DashboardViewModel(
         filter: String,
         targetCurrency: String
     ): DashboardUiState {
-        // 1. Filter by Date
         val filtered = filterReceipts(allReceipts, filter)
 
-        // 2. Calculate Totals (Normalized to Target Currency)
         val totalAmount = filtered.sumOf {
-            CurrencyUtils.toEur(it.receipt.totalAmount, it.receipt.currency)
+            CurrencyUtils.convert(it.receipt.totalAmount, it.receipt.currency, targetCurrency)
         }
-        val formattedTotal = CurrencyUtils.formatEur(totalAmount)
 
-        // 3. Prepare Graph Data
-        val (graphData, rangeLabel) = calculateGraphData(filtered, filter)
+        val formattedTotal = CurrencyUtils.format(totalAmount, targetCurrency)
 
-        // 4. Prepare Category Data
-        val categoryData = calculateCategoryData(filtered, totalAmount)
+        val (graphData, rangeLabel) = calculateGraphData(filtered, filter, targetCurrency)
+        val categoryData = calculateCategoryData(filtered, totalAmount, targetCurrency)
 
         // 5. Prepare Recent Transactions
         val recentList = filtered.map { item ->
@@ -122,7 +120,7 @@ class DashboardViewModel(
 
         return DashboardUiState(
             isLoading = false,
-            currencySymbol = if (targetCurrency == "EUR") "€" else "$",
+            currencySymbol = java.util.Currency.getInstance(targetCurrency).symbol,
             totalSpendingFormatted = formattedTotal,
             receiptCount = filtered.size,
             dateRangeLabel = rangeLabel,
@@ -149,7 +147,11 @@ class DashboardViewModel(
         return list.filter { it.receipt.dateTimestamp >= startTime }
     }
 
-    private fun calculateGraphData(receipts: List<ReceiptWithDetails>, filter: String): Pair<List<Double>, String> {
+    private fun calculateGraphData(
+        receipts: List<ReceiptWithDetails>,
+        filter: String,
+        targetCurrency: String
+    ): Pair<List<Double>, String> {
         val cal = Calendar.getInstance()
         val now = System.currentTimeMillis()
         val dateFormat = SimpleDateFormat("MMM dd", Locale.US)
@@ -175,7 +177,7 @@ class DashboardViewModel(
                     rCal.timeInMillis = it.receipt.dateTimestamp
                     val dayConstant = rCal.get(Calendar.DAY_OF_WEEK)
                     val index = (dayConstant - cal.firstDayOfWeek + 7) % 7
-                    val amount = CurrencyUtils.toEur(it.receipt.totalAmount, it.receipt.currency)
+                    val amount = CurrencyUtils.convert(it.receipt.totalAmount, it.receipt.currency, targetCurrency)
                     if (index in 0..6) buckets[index] += amount
                 }
                 Pair(buckets.toList(), "${dateFormat.format(start)} - ${dateFormat.format(end)}")
@@ -193,7 +195,7 @@ class DashboardViewModel(
                     cal.timeInMillis = it.receipt.dateTimestamp
                     val day = cal.get(Calendar.DAY_OF_MONTH)
                     if (day - 1 in buckets.indices) {
-                        buckets[day - 1] += CurrencyUtils.toEur(it.receipt.totalAmount, it.receipt.currency)
+                        buckets[day - 1] += CurrencyUtils.convert(it.receipt.totalAmount, it.receipt.currency, targetCurrency)
                     }
                 }
                 Pair(buckets.toList(), "${dateFormat.format(start)} - ${dateFormat.format(end)}")
@@ -207,7 +209,7 @@ class DashboardViewModel(
                     cal.timeInMillis = it.receipt.dateTimestamp
                     val month = cal.get(Calendar.MONTH)
                     if (month in 0..11) {
-                        buckets[month] += CurrencyUtils.toEur(it.receipt.totalAmount, it.receipt.currency)
+                        buckets[month] += CurrencyUtils.convert(it.receipt.totalAmount, it.receipt.currency, targetCurrency)
                     }
                 }
                 Pair(buckets.toList(), yearFormat.format(start))
@@ -230,7 +232,7 @@ class DashboardViewModel(
                     val y = cal.get(Calendar.YEAR)
                     val index = y - minYear
                     if (index in buckets.indices) {
-                        buckets[index] += CurrencyUtils.toEur(it.receipt.totalAmount, it.receipt.currency)
+                        buckets[index] += CurrencyUtils.convert(it.receipt.totalAmount, it.receipt.currency, targetCurrency)
                     }
                 }
                 Pair(buckets.toList(), "${yearFormat.format(minTs)} - ${yearFormat.format(maxTs)}")
@@ -238,12 +240,18 @@ class DashboardViewModel(
         }
     }
 
-    private fun calculateCategoryData(receipts: List<ReceiptWithDetails>, totalAmount: Double): List<CategoryUiData> {
+    private fun calculateCategoryData(
+        receipts: List<ReceiptWithDetails>,
+        totalAmount: Double,
+        targetCurrency: String
+    ): List<CategoryUiData> {
         if (totalAmount == 0.0) return emptyList()
 
         val grouped = receipts.groupBy { it.category }
         val rawData = grouped.map { (category, list) ->
-            val sum = list.sumOf { CurrencyUtils.toEur(it.receipt.totalAmount, it.receipt.currency) }
+            val sum = list.sumOf {
+                CurrencyUtils.convert(it.receipt.totalAmount, it.receipt.currency, targetCurrency)
+            }
             Triple(category?.name ?: "Uncategorized", sum, sum / totalAmount)
         }.sortedByDescending { it.second }
 
@@ -262,9 +270,9 @@ class DashboardViewModel(
         return finalData.mapIndexed { index, (name, sum, pct) ->
             CategoryUiData(
                 name = name,
-                totalFormatted = CurrencyUtils.formatEur(sum),
+                totalFormatted = CurrencyUtils.format(sum, targetCurrency),
                 percentage = pct.toFloat(),
-                colorIndex = index // UI will assign actual color based on this index
+                colorIndex = index
             )
         }
     }
@@ -274,7 +282,10 @@ class DashboardViewModel(
         val Factory: ViewModelProvider.Factory = viewModelFactory {
             initializer {
                 val application = (this[APPLICATION_KEY] as ReceiptApplication)
-                DashboardViewModel(application.container.receiptRepository)
+                DashboardViewModel(
+                    application.container.receiptRepository,
+                    application.container.settingsRepository
+                )
             }
         }
     }

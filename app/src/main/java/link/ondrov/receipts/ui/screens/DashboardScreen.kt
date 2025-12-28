@@ -12,8 +12,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.QrCodeScanner
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -32,6 +30,7 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.net.toUri
@@ -48,10 +47,11 @@ import link.ondrov.receipts.ui.viewmodels.DashboardUiState
 import link.ondrov.receipts.ui.viewmodels.TransactionUiData
 
 @Composable
-fun DashboardScreen(
+fun DashboardRoute(
     onOpenReceipts: () -> Unit,
     onReceiptClick: (String) -> Unit,
     onNewScan: (String, String) -> Unit,
+    onSettingsClick: () -> Unit,
     viewModel: DashboardViewModel = viewModel(factory = DashboardViewModel.Factory)
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -96,6 +96,7 @@ fun DashboardScreen(
         onFilterSelected = viewModel::onFilterSelected,
         onOpenReceipts = onOpenReceipts,
         onReceiptClick = onReceiptClick,
+        onSettingsClick = onSettingsClick,
         onScanClick = {
             scanner.getStartScanIntent(context as Activity)
                 .addOnSuccessListener { scannerLauncher.launch(IntentSenderRequest.Builder(it).build()) }
@@ -110,9 +111,12 @@ fun DashboardContent(
     onFilterSelected: (String) -> Unit,
     onOpenReceipts: () -> Unit,
     onReceiptClick: (String) -> Unit,
-    onScanClick: () -> Unit
+    onSettingsClick: () -> Unit,
+    onScanClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Scaffold(
+        modifier = modifier,
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         floatingActionButton = {
             LargeFloatingActionButton(
@@ -132,26 +136,9 @@ fun DashboardContent(
                 .padding(horizontal = 20.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            item { TopBarSection() }
-
-            item {
-                Text(
-                    "Dashboard",
-                    style = MaterialTheme.typography.headlineLarge.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-                )
-            }
-
-            item {
-                FilterSection(selectedFilter, onFilterSelected)
-            }
-
-            item {
-                SummaryRow(state.totalSpendingFormatted, state.receiptCount)
-            }
-
+            item { DashboardTopBar(onSettingsClick = onSettingsClick) }
+            item { FilterSection(selectedFilter, onFilterSelected) }
+            item { DashboardSummary(state.totalSpendingFormatted, state.receiptCount) }
             item {
                 SpendingTrendsCard(
                     graphData = state.graphData,
@@ -159,41 +146,22 @@ fun DashboardContent(
                     totalFormatted = state.totalSpendingFormatted
                 )
             }
-
             item {
                 CategoryBreakdownCard(
                     breakdown = state.categoryBreakdown,
                     totalFormatted = state.totalSpendingFormatted
                 )
             }
-
             item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .clickable { onOpenReceipts() }
-                        .padding(vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        "Transactions ($selectedFilter)",
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onBackground,
-                    )
-                    Icon(Icons.AutoMirrored.Filled.ArrowForward, "Go to Receipts", tint = MaterialTheme.colorScheme.primary)
-                }
+                TransactionsHeader(
+                    selectedFilter = selectedFilter,
+                    onOpenReceipts = onOpenReceipts
+                )
             }
 
             if (state.recentTransactions.isEmpty()) {
                 item {
-                    Text(
-                        "No transactions found.",
-                        modifier = Modifier.padding(vertical = 20.dp),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    EmptyTransactionState()
                 }
             } else {
                 items(state.recentTransactions) { transaction ->
@@ -210,7 +178,7 @@ fun DashboardContent(
 }
 
 @Composable
-fun TopBarSection() {
+fun DashboardTopBar(onSettingsClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -218,18 +186,22 @@ fun TopBarSection() {
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(
-            imageVector = Icons.Outlined.GridView,
-            contentDescription = "Menu",
-            tint = MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier.size(28.dp)
+        Text(
+            "Dashboard",
+            style = MaterialTheme.typography.headlineLarge.copy(
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground
+            )
         )
-        Icon(
-            imageVector = Icons.Filled.Notifications,
-            contentDescription = "Alerts",
-            tint = MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier.size(28.dp)
-        )
+
+        IconButton(onClick = onSettingsClick) {
+            Icon(
+                imageVector = Icons.Filled.Settings,
+                contentDescription = "Settings",
+                tint = MaterialTheme.colorScheme.onBackground,
+                modifier = Modifier.size(28.dp)
+            )
+        }
     }
 }
 
@@ -262,7 +234,7 @@ fun FilterSection(
 }
 
 @Composable
-fun SummaryRow(
+fun DashboardSummary(
     totalSpending: String,
     receiptCount: Int
 ) {
@@ -300,6 +272,33 @@ fun StatCard(modifier: Modifier = Modifier, title: String, value: String) {
 }
 
 @Composable
+private fun TransactionsHeader(
+    selectedFilter: String,
+    onOpenReceipts: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable { onOpenReceipts() }
+            .padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = "Transactions ($selectedFilter)",
+            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+            color = MaterialTheme.colorScheme.onBackground,
+        )
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+            contentDescription = "Go to Receipts",
+            tint = MaterialTheme.colorScheme.primary
+        )
+    }
+}
+
+@Composable
 fun SpendingTrendsCard(
     graphData: List<Double>,
     timeLabel: String,
@@ -328,44 +327,7 @@ fun SpendingTrendsCard(
                     Text("No data", Modifier.align(Alignment.Center), style = MaterialTheme.typography.bodySmall)
                 } else {
                     Canvas(modifier = Modifier.fillMaxSize()) {
-                        val width = size.width
-                        val height = size.height
-                        val maxVal = (graphData.maxOrNull() ?: 1.0) * 1.2
-                        val safeMax = if (maxVal == 0.0) 1.0 else maxVal
-                        val stepX = if (graphData.size > 1) width / (graphData.size - 1) else width
-                        val path = Path()
-
-                        val firstY = height - ((graphData.firstOrNull() ?: 0.0) / safeMax * height).toFloat()
-                        path.moveTo(0f, firstY)
-
-                        if (graphData.size > 1) {
-                            for (i in 0 until graphData.size - 1) {
-                                val p1x = i * stepX
-                                val p1y = height - ((graphData[i] / safeMax) * height).toFloat()
-                                val p2x = (i + 1) * stepX
-                                val p2y = height - ((graphData[i + 1] / safeMax) * height).toFloat()
-                                val cx1 = (p1x + p2x) / 2
-                                path.cubicTo(cx1, p1y, cx1, p2y, p2x, p2y)
-                            }
-                        } else {
-                            path.lineTo(width, firstY)
-                        }
-
-                        val fillPath = Path().apply { addPath(path); lineTo(width, height); lineTo(0f, height); close() }
-                        drawPath(
-                            path = fillPath,
-                            brush = Brush.verticalGradient(
-                                colors = listOf(graphFillColor, Color.Transparent),
-                                startY = 0f,
-                                endY = height
-                            )
-                        )
-
-                        drawPath(
-                            path = path,
-                            color = graphColor,
-                            style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
-                        )
+                        drawTrendChart(graphData, graphColor, graphFillColor)
                     }
                 }
             }
@@ -419,39 +381,7 @@ fun CategoryBreakdownCard(
                         modifier = Modifier.size(140.dp)
                     ) {
                         Canvas(modifier = Modifier.size(140.dp)) {
-                            val strokeWidth = 16.dp.toPx()
-                            val radius = (size.minDimension - strokeWidth) / 2
-                            val circumference = (2 * Math.PI * radius).toFloat()
-
-                            // The rounded cap adds half a stroke width on EACH end.
-                            // We need to account for this so colors don't overlap.
-                            val strokeCapAngle = (strokeWidth / circumference) * 360f
-                            val visualGapAngle = 4f
-                            val totalGapAdjustment = strokeCapAngle + visualGapAngle
-
-                            var currentStartAngle = -90f
-
-                            breakdown.forEach { item ->
-                                // Convert percentage (0.0 - 1.0) to degrees
-                                val sweepAngleFull = item.percentage * 360f
-
-                                // Only draw if the slice is large enough to support the rounded caps and gap
-                                if (sweepAngleFull > totalGapAdjustment) {
-                                    val drawSweep = sweepAngleFull - totalGapAdjustment
-
-                                    // Offset the start so the gap is centered
-                                    val startOffset = (visualGapAngle / 2f) + (strokeCapAngle / 2f)
-
-                                    drawArc(
-                                        color = themePalette[item.colorIndex % themePalette.size],
-                                        startAngle = currentStartAngle + startOffset,
-                                        sweepAngle = drawSweep,
-                                        useCenter = false,
-                                        style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
-                                    )
-                                }
-                                currentStartAngle += sweepAngleFull
-                            }
+                            drawPieChart(breakdown, themePalette)
                         }
 
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -513,6 +443,16 @@ fun LegendItem(color: Color, label: String, pct: String) {
 }
 
 @Composable
+private fun EmptyTransactionState() {
+    Text(
+        text = "No transactions found.",
+        modifier = Modifier.padding(vertical = 20.dp),
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+}
+
+@Composable
 fun TransactionItem(item: TransactionUiData, onClick: () -> Unit) {
     val iconVector = link.ondrov.receipts.ui.utils.IconRegistry.getIcon(item.iconId)
     Row(
@@ -534,6 +474,83 @@ fun TransactionItem(item: TransactionUiData, onClick: () -> Unit) {
         Text(item.amountFormatted, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onSurface)
     }
 }
+
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawTrendChart(
+    data: List<Double>,
+    color: Color,
+    fillColor: Color
+) {
+    val width = size.width
+    val height = size.height
+    val maxVal = (data.maxOrNull() ?: 1.0) * 1.2
+    val safeMax = if (maxVal == 0.0) 1.0 else maxVal
+    val stepX = if (data.size > 1) width / (data.size - 1) else width
+    val path = Path()
+
+    val firstY = height - ((data.firstOrNull() ?: 0.0) / safeMax * height).toFloat()
+    path.moveTo(0f, firstY)
+
+    if (data.size > 1) {
+        for (i in 0 until data.size - 1) {
+            val p1x = i * stepX
+            val p1y = height - ((data[i] / safeMax) * height).toFloat()
+            val p2x = (i + 1) * stepX
+            val p2y = height - ((data[i + 1] / safeMax) * height).toFloat()
+            val cx1 = (p1x + p2x) / 2
+            path.cubicTo(cx1, p1y, cx1, p2y, p2x, p2y)
+        }
+    } else {
+        path.lineTo(width, firstY)
+    }
+
+    val fillPath = Path().apply { addPath(path); lineTo(width, height); lineTo(0f, height); close() }
+    drawPath(
+        path = fillPath,
+        brush = Brush.verticalGradient(
+            colors = listOf(fillColor, Color.Transparent),
+            startY = 0f,
+            endY = height
+        )
+    )
+
+    drawPath(
+        path = path,
+        color = color,
+        style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+    )
+}
+
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawPieChart(
+    breakdown: List<CategoryUiData>,
+    palette: List<Color>
+) {
+    val strokeWidth = 16.dp.toPx()
+    val radius = (size.minDimension - strokeWidth) / 2
+    val circumference = (2 * Math.PI * radius).toFloat()
+    val strokeCapAngle = (strokeWidth / circumference) * 360f
+    val visualGapAngle = 4f
+    val totalGapAdjustment = strokeCapAngle + visualGapAngle
+
+    var currentStartAngle = -90f
+
+    breakdown.forEach { item ->
+        val sweepAngleFull = item.percentage * 360f
+        if (sweepAngleFull > totalGapAdjustment) {
+            val drawSweep = sweepAngleFull - totalGapAdjustment
+            val startOffset = (visualGapAngle / 2f) + (strokeCapAngle / 2f)
+
+            drawArc(
+                color = palette[item.colorIndex % palette.size],
+                startAngle = currentStartAngle + startOffset,
+                sweepAngle = drawSweep,
+                useCenter = false,
+                style = Stroke(strokeWidth, cap = StrokeCap.Round)
+            )
+        }
+        currentStartAngle += sweepAngleFull
+    }
+}
+
 
 @Preview(showBackground = true)
 @Composable
@@ -605,6 +622,7 @@ fun DashboardPreview() {
             onFilterSelected = {}, // No-op for preview
             onOpenReceipts = {},
             onReceiptClick = {},
+            onSettingsClick = {},
             onScanClick = {}
         )
     }
