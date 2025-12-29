@@ -9,25 +9,32 @@ import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
-// Create a singleton DataStore instance attached to the Context
+// Singleton DataStore attached to Context
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "user_settings")
 
 class SettingsRepository(private val context: Context) {
 
-    // Define Keys
+    // --- DATASTORE KEYS ---
     private object Keys {
         val API_KEY = stringPreferencesKey("api_key")
         val CURRENCY = stringPreferencesKey("currency")
+        val GEMINI_MODEL = stringPreferencesKey("gemini_model")
     }
 
-    // Read Data (Flows)
+    // --- READ DATA (Flows) ---
+
     val apiKey: Flow<String> = context.dataStore.data
         .map { preferences -> preferences[Keys.API_KEY] ?: "" }
 
     val currency: Flow<String> = context.dataStore.data
         .map { preferences -> preferences[Keys.CURRENCY] ?: "EUR" }
 
-    // Write Data
+    // Default to Flash 2.5 as it is the current speed/cost leader
+    val selectedModel: Flow<String> = context.dataStore.data
+        .map { preferences -> preferences[Keys.GEMINI_MODEL] ?: "gemini-2.5-flash" }
+
+    // --- WRITE DATA ---
+
     suspend fun saveApiKey(key: String) {
         context.dataStore.edit { preferences ->
             preferences[Keys.API_KEY] = key
@@ -37,6 +44,12 @@ class SettingsRepository(private val context: Context) {
     suspend fun saveCurrency(currencyCode: String) {
         context.dataStore.edit { preferences ->
             preferences[Keys.CURRENCY] = currencyCode
+        }
+    }
+
+    suspend fun saveSelectedModel(modelName: String) {
+        context.dataStore.edit { preferences ->
+            preferences[Keys.GEMINI_MODEL] = modelName
         }
     }
 }

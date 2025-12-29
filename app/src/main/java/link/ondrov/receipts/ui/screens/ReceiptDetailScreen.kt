@@ -46,7 +46,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import link.ondrov.receipts.data.model.ReceiptItem
 import link.ondrov.receipts.data.model.ReceiptWithDetails
-import link.ondrov.receipts.ui.components.ExpressiveLoadingState
 import link.ondrov.receipts.ui.viewmodels.ReceiptDetailViewModel
 import java.io.File
 import java.text.SimpleDateFormat
@@ -57,28 +56,16 @@ import java.util.Locale
 @Composable
 fun ReceiptDetailScreen(
     receiptId: String,
-    imageUriArg: String? = null,
     onBack: () -> Unit,
     onNavigateToEdit: (String) -> Unit,
     viewModel: ReceiptDetailViewModel = viewModel(factory = ReceiptDetailViewModel.Factory)
 ) {
     val receiptState by viewModel.uiState.collectAsState()
 
-    val isAnalyzing = receiptState == null
-    var errorMsg by remember { mutableStateOf<String?>(null) }
-
-    LaunchedEffect(receiptId) {
-        if (receiptState == null && imageUriArg != null) {
-            val uri = Uri.parse(Uri.decode(imageUriArg))
-            val file = File(uri.path ?: "")
-            viewModel.analyzeAndSave(file, onError = { errorMsg = it })
+    if (receiptState == null) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator()
         }
-    }
-
-    if (errorMsg != null) {
-        ErrorState(msg = errorMsg!!, onBack = onBack)
-    } else if (isAnalyzing) {
-        ExpressiveLoadingState(message = "Extracting data from receipt")
     } else {
         ReceiptDetailsContent(
             receipt = receiptState!!,

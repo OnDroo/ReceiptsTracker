@@ -3,7 +3,7 @@ package link.ondrov.receipts
 import android.app.Application
 import android.content.Context
 import link.ondrov.receipts.data.AppDatabase
-import link.ondrov.receipts.data.repository.MockReceiptRepository
+import link.ondrov.receipts.data.repository.GeminiRepository
 import link.ondrov.receipts.data.repository.ReceiptRepository
 import link.ondrov.receipts.data.repository.RoomReceiptRepository
 import link.ondrov.receipts.data.repository.SettingsRepository
@@ -28,6 +28,7 @@ class ReceiptApplication : Application() {
 interface AppContainer {
     val receiptRepository: ReceiptRepository
     val settingsRepository: SettingsRepository
+    val geminiRepository: GeminiRepository
 }
 
 /**
@@ -43,5 +44,12 @@ class AppDataContainer(private val context: Context) : AppContainer {
 
     override val settingsRepository: SettingsRepository by lazy {
         SettingsRepository(context)
+    }
+
+    override val geminiRepository: GeminiRepository by lazy {
+        GeminiRepository(
+            settingsRepository = settingsRepository,
+            receiptRepository = receiptRepository
+        )
     }
 }

@@ -1,48 +1,26 @@
 package link.ondrov.receipts.ui.screens
 
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.outlined.QrCodeScanner
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.*
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import link.ondrov.receipts.ui.viewmodels.DashboardViewModel
-import android.app.Activity
-import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.IntentSenderRequest
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.core.net.toUri
-import com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions
-import com.google.mlkit.vision.documentscanner.GmsDocumentScanning
-import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import link.ondrov.receipts.ui.components.*
 import link.ondrov.receipts.ui.theme.ReceiptsTheme
-import link.ondrov.receipts.util.FileUtils
 import link.ondrov.receipts.ui.viewmodels.CategoryUiData
 import link.ondrov.receipts.ui.viewmodels.DashboardUiState
 import link.ondrov.receipts.ui.viewmodels.TransactionUiData
@@ -51,45 +29,12 @@ import link.ondrov.receipts.ui.viewmodels.TransactionUiData
 fun DashboardRoute(
     onOpenReceipts: () -> Unit,
     onReceiptClick: (String) -> Unit,
-    onNewScan: (String, String) -> Unit,
+    onScanClick: () -> Unit,
     onSettingsClick: () -> Unit,
     viewModel: DashboardViewModel = viewModel(factory = DashboardViewModel.Factory)
 ) {
     val state by viewModel.uiState.collectAsState()
     val currentFilter by viewModel.selectedFilter.collectAsState()
-
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-
-    val scannerOptions = remember {
-        GmsDocumentScannerOptions.Builder()
-            .setGalleryImportAllowed(true)
-            .setPageLimit(1)
-            .setResultFormats(GmsDocumentScannerOptions.RESULT_FORMAT_JPEG)
-            .setScannerMode(GmsDocumentScannerOptions.SCANNER_MODE_FULL)
-            .build()
-    }
-    val scanner = remember { GmsDocumentScanning.getClient(scannerOptions) }
-
-    val scannerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartIntentSenderForResult()
-    ) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            val scanResult = GmsDocumentScanningResult.fromActivityResultIntent(result.data)
-            scanResult?.pages?.firstOrNull()?.let { page ->
-                scope.launch(Dispatchers.IO) {
-                    val permanentFile = FileUtils.copyUriToInternalStorage(context, page.imageUri)
-                    if (permanentFile != null) {
-                        val receiptId = permanentFile.nameWithoutExtension
-                        val encodedUri = Uri.encode(permanentFile.toUri().toString())
-                        withContext(Dispatchers.Main) {
-                            onNewScan(receiptId, encodedUri)
-                        }
-                    }
-                }
-            }
-        }
-    }
 
     DashboardContent(
         state = state,
@@ -98,10 +43,7 @@ fun DashboardRoute(
         onOpenReceipts = onOpenReceipts,
         onReceiptClick = onReceiptClick,
         onSettingsClick = onSettingsClick,
-        onScanClick = {
-            scanner.getStartScanIntent(context as Activity)
-                .addOnSuccessListener { scannerLauncher.launch(IntentSenderRequest.Builder(it).build()) }
-        }
+        onScanClick = onScanClick
     )
 }
 
