@@ -25,6 +25,8 @@ class MockReceiptRepository : ReceiptRepository {
     private val catTech = Category("c3", "Tech", "tech")
     private val catTransport = Category("c4", "Transport", "bus")
 
+    private val mockCategories = mutableListOf(catGroceries, catDining, catTech, catTransport)
+
     // 2. Define Mock Data (Changed to MutableList to support delete/save in memory)
     private val mockData = mutableListOf(
         // --- THIS WEEK ---
@@ -155,6 +157,18 @@ class MockReceiptRepository : ReceiptRepository {
             mockData[existingIndex] = newEntry
         } else {
             mockData.add(newEntry)
+        }
+    }
+
+    override suspend fun updateReceipt(receipt: Receipt, items: List<ReceiptItem>) {
+        val index = mockData.indexOfFirst { it.receipt.id == receipt.id }
+        if (index != -1) {
+            val updatedEntry = ReceiptWithDetails(
+                receipt = receipt,
+                category = mockCategories.find { it.id == receipt.categoryId },
+                items = items
+            )
+            mockData[index] = updatedEntry
         }
     }
 

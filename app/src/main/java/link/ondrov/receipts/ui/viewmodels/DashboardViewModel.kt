@@ -107,8 +107,7 @@ class DashboardViewModel(
         val categoryData = calculateCategoryData(filtered, totalAmount, targetCurrency)
 
         // 5. Prepare Recent Transactions
-        val recentList = filtered.map { item ->
-            val amount = CurrencyUtils.toEur(item.receipt.totalAmount, item.receipt.currency)
+        val recentList = filtered.take(5).map { item ->
             TransactionUiData(
                 id = item.receipt.id,
                 storeName = item.receipt.storeName,

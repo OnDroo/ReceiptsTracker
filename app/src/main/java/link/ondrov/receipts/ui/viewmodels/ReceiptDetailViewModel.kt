@@ -57,14 +57,14 @@ class ReceiptDetailViewModel(
     fun deleteReceipt(onComplete: () -> Unit) {
         val current = uiState.value?.receipt ?: return
         viewModelScope.launch {
-            // 1. Delete File
+            // 1. Delete the physical image file
             try {
                 val file = File(getApplication<Application>().filesDir, current.imageFileName)
                 if (file.exists()) file.delete()
             } catch (e: Exception) {
                 Log.e("ReceiptVM", "Error deleting file", e)
             }
-            // 2. Delete DB Entry
+            // 2. Delete the DB Entry (Cascade deletes items)
             receiptRepository.deleteReceipt(current)
             onComplete()
         }
@@ -72,7 +72,7 @@ class ReceiptDetailViewModel(
 
     fun updateReceipt(updated: ReceiptWithDetails, onComplete: () -> Unit) {
         viewModelScope.launch {
-            receiptRepository.saveReceipt(updated.receipt, updated.items)
+            receiptRepository.updateReceipt(updated.receipt, updated.items)
             onComplete()
         }
     }
@@ -98,19 +98,13 @@ class ReceiptDetailViewModel(
 
         val apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=$apiKey"
 
-        // 2. Fetch Categories for Enum
         val categories = receiptRepository.getAllCategories().first()
         val categoryNames = categories.joinToString(", ") { it.name }
-
-        // Build JSON Array for Schema Enum
         val categoryNamesArray = JSONArray()
         categories.forEach { categoryNamesArray.put(it.name) }
 
-        // 3. YOUR PROMPT (Restored)
-        // We still include the list in text as a hint, but the Schema does the hard work.
         val prompt = """
             Analyze this receipt. Extract data to match the JSON structure exactly.
-            
             RULES:
             1. Date must be in format "YYYY-MM-DD HH:mm:ss". If time is missing on receipt, use "00:00:00".
             2. Currency must be the 3-letter ISO 4217 code (e.g., EUR, USD, CZK, GBP). Infer from symbol or address.
@@ -119,33 +113,26 @@ class ReceiptDetailViewModel(
                Return the exact name in the 'categoryName' field.
         """.trimIndent()
 
-        // 4. Encode Image
         val bitmap = BitmapFactory.decodeFile(imageFile.absolutePath)
         val base64Image = bitmapToBase64(bitmap)
 
-        // 5. Build JSON Request with STRICT SCHEMA
         val jsonSchema = JSONObject().apply {
             put("type", "OBJECT")
             put("properties", JSONObject().apply {
                 put("storeName", JSONObject().put("type", "STRING"))
                 put("totalAmount", JSONObject().put("type", "NUMBER"))
-
                 put("currency", JSONObject().apply {
                     put("type", "STRING")
                     put("description", "ISO 4217 Code (e.g. EUR)")
                 })
-
                 put("date", JSONObject().apply {
                     put("type", "STRING")
                     put("description", "YYYY-MM-DD HH:mm:ss")
                 })
-
-                // CRITICAL: The enum forces the model to pick a valid category
                 put("categoryName", JSONObject().apply {
                     put("type", "STRING")
                     put("enum", categoryNamesArray)
                 })
-
                 put("items", JSONObject().apply {
                     put("type", "ARRAY")
                     put("items", JSONObject().apply {
@@ -166,13 +153,8 @@ class ReceiptDetailViewModel(
                     })
                 })
             })
-            // CRITICAL: Required fields ensure they are not skipped
             put("required", JSONArray().apply {
-                put("storeName")
-                put("totalAmount")
-                put("date")
-                put("categoryName")
-                put("items")
+                put("storeName"); put("totalAmount"); put("date"); put("categoryName"); put("items")
             })
         }
 
@@ -191,7 +173,6 @@ class ReceiptDetailViewModel(
             })
         }
 
-        // 6. Send Request
         val url = URL(apiUrl)
         val connection = url.openConnection() as HttpURLConnection
         connection.requestMethod = "POST"
@@ -207,7 +188,6 @@ class ReceiptDetailViewModel(
 
             val json = JSONObject(textData)
 
-            // Date Parsing
             val dateString = json.optString("date", "")
             val timestamp = try {
                 SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).parse(dateString)?.time ?: System.currentTimeMillis()
@@ -219,13 +199,10 @@ class ReceiptDetailViewModel(
                 }
             }
 
-            // Category Mapping
             val returnedCategoryName = json.optString("categoryName", "")
             val matchedCategory = categories.find { it.name.equals(returnedCategoryName, ignoreCase = true) }
-            // Fallback to first category if matching somehow fails (though schema prevents this mostly)
             val categoryId = matchedCategory?.id ?: categories.firstOrNull()?.id
 
-            // Map Items
             val id = imageFile.nameWithoutExtension
             val itemsList = (0 until json.getJSONArray("items").length()).map { i ->
                 val item = json.getJSONArray("items").getJSONObject(i)
@@ -269,7 +246,8 @@ class ReceiptDetailViewModel(
             initializer {
                 val app = (this[APPLICATION_KEY] as ReceiptApplication)
                 val handle = createSavedStateHandle()
-                ReceiptDetailViewModel(app,
+                ReceiptDetailViewModel(
+                    app,
                     app.container.receiptRepository,
                     app.container.settingsRepository,
                     handle

@@ -139,18 +139,20 @@ fun DashboardContent(
         ) {
             item { DashboardTopBar(onSettingsClick = onSettingsClick) }
             item { FilterSection(selectedFilter, onFilterSelected) }
-            item { DashboardSummary(state.totalSpendingFormatted, state.receiptCount) }
+            item { DashboardSummary(state.totalSpendingFormatted, state.receiptCount, onOpenReceipts) }
             item {
                 SpendingTrendsCard(
                     graphData = state.graphData,
                     timeLabel = state.dateRangeLabel,
-                    totalFormatted = state.totalSpendingFormatted
+                    totalFormatted = state.totalSpendingFormatted,
+                    onOpenReceipts
                 )
             }
             item {
                 CategoryBreakdownCard(
                     breakdown = state.categoryBreakdown,
-                    totalFormatted = state.totalSpendingFormatted
+                    totalFormatted = state.totalSpendingFormatted,
+                    onOpenReceipts
                 )
             }
             item {

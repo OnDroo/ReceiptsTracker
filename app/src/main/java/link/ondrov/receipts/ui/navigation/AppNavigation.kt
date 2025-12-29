@@ -79,11 +79,9 @@ fun AppNavigation() {
             )
         }
 
-        // --- NEW RECEIPT LIST SCREEN ---
+        // --- RECEIPT LIST SCREEN ---
         composable(
             route = Screen.ReceiptList.route,
-            enterTransition = { slideInHorizontally { it } },
-            exitTransition = { slideOutHorizontally { it } }
         ) {
             link.ondrov.receipts.ui.screens.ReceiptListRoute(
                 onBack = { navController.popBackStack() },
@@ -96,14 +94,6 @@ fun AppNavigation() {
         // --- SETTINGS ---
         composable(
             route = Screen.Settings.route,
-            enterTransition = {
-                // Slide in from Right
-                slideInHorizontally(initialOffsetX = { it }, animationSpec = tween(400))
-            },
-            exitTransition = {
-                // Slide out to Right
-                slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween(400))
-            }
         ) {
             SettingsScreen(
                 onBack = { navController.popBackStack() }
@@ -128,16 +118,19 @@ fun AppNavigation() {
             ReceiptDetailScreen(
                 receiptId = receiptId,
                 imageUriArg = imageUri,
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                onNavigateToEdit = { id ->
+                    navController.navigate(Screen.ReceiptEdit.createRoute(id))
+                }
             )
         }
 
-        // --- EDIT ---
+        // --- EDIT RECEIPT ---
         composable(
             route = Screen.ReceiptEdit.route,
-            arguments = listOf(navArgument("receiptId") { type = NavType.StringType })
+            arguments = listOf(navArgument("receiptId") { type = NavType.StringType }),
         ) {
-            // Using the Factory to get the ViewModel
+            // We reuse the ReceiptDetailViewModel because it already knows how to fetch a receipt by ID
             val viewModel: ReceiptDetailViewModel = viewModel(factory = ReceiptDetailViewModel.Factory)
             val uiState by viewModel.uiState.collectAsState()
 
@@ -145,8 +138,10 @@ fun AppNavigation() {
                 EditReceiptScreen(
                     originalReceipt = receipt,
                     onDismiss = { navController.popBackStack() },
-                    onSave = { updated ->
-                        viewModel.updateReceipt(updated) { navController.popBackStack() }
+                    onSave = { updatedReceiptWithDetails ->
+                        viewModel.updateReceipt(updatedReceiptWithDetails) {
+                            navController.popBackStack()
+                        }
                     }
                 )
             }

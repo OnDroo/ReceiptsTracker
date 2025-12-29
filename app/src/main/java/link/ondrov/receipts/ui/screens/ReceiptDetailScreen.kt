@@ -59,6 +59,7 @@ fun ReceiptDetailScreen(
     receiptId: String,
     imageUriArg: String? = null,
     onBack: () -> Unit,
+    onNavigateToEdit: (String) -> Unit,
     viewModel: ReceiptDetailViewModel = viewModel(factory = ReceiptDetailViewModel.Factory)
 ) {
     val receiptState by viewModel.uiState.collectAsState()
@@ -82,7 +83,7 @@ fun ReceiptDetailScreen(
         ReceiptDetailsContent(
             receipt = receiptState!!,
             onBack = onBack,
-            onEdit = { /* TODO: Navigate to Edit Screen */ },
+            onEdit = { onNavigateToEdit(receiptId) },
             onDelete = {
                 viewModel.deleteReceipt { onBack() }
             }

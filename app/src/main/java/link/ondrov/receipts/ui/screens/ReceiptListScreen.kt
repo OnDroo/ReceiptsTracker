@@ -60,7 +60,6 @@ fun ReceiptListScreen(
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         topBar = {
-            // FIX: Using standard SearchBar instead of DockedSearchBar for proper layout
             SearchBar(
                 modifier = Modifier
                     .fillMaxWidth()

@@ -8,7 +8,6 @@ import link.ondrov.receipts.data.model.ReceiptItem
 import link.ondrov.receipts.data.model.ReceiptWithDetails
 
 class RoomReceiptRepository(private val receiptDao: ReceiptDao) : ReceiptRepository {
-
     override fun getAllReceipts(): Flow<List<ReceiptWithDetails>> {
         return receiptDao.getAllReceipts()
     }
@@ -19,6 +18,11 @@ class RoomReceiptRepository(private val receiptDao: ReceiptDao) : ReceiptReposit
 
     override suspend fun saveReceipt(receipt: Receipt, items: List<ReceiptItem>) {
         receiptDao.insertReceiptWithItems(receipt, items)
+    }
+
+    override suspend fun updateReceipt(receipt: Receipt, items: List<ReceiptItem>) {
+        receiptDao.updateReceipt(receipt)
+        receiptDao.replaceItems(receipt.id, items)
     }
 
     override suspend fun deleteReceipt(receipt: Receipt) {

@@ -2,6 +2,7 @@ package link.ondrov.receipts.ui.components
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -23,21 +24,24 @@ import link.ondrov.receipts.ui.viewmodels.CategoryUiData
 @Composable
 fun DashboardSummary(
     totalSpending: String,
-    receiptCount: Int
+    receiptCount: Int,
+    onClick: () -> Unit
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        StatCard(Modifier.weight(1f), "Total Spending", totalSpending)
-        StatCard(Modifier.weight(1f), "Receipts Scanned", receiptCount.toString())
+        StatCard(Modifier.weight(1f), "Total Spending", totalSpending, onClick = onClick)
+        StatCard(Modifier.weight(1f), "Receipts Scanned", receiptCount.toString(), onClick = onClick)
     }
 }
 
 @Composable
-fun StatCard(modifier: Modifier = Modifier, title: String, value: String) {
+fun StatCard(modifier: Modifier = Modifier, title: String, value: String, onClick: () -> Unit) {
     Card(
-        modifier = modifier,
+        modifier = modifier
+            .clip(RoundedCornerShape(24.dp))
+            .clickable { onClick() },
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
@@ -63,7 +67,8 @@ fun StatCard(modifier: Modifier = Modifier, title: String, value: String) {
 fun SpendingTrendsCard(
     graphData: List<Double>,
     timeLabel: String,
-    totalFormatted: String
+    totalFormatted: String,
+    onClick: () -> Unit
 ) {
     val graphColor = MaterialTheme.colorScheme.primary
     val graphFillColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
@@ -71,7 +76,10 @@ fun SpendingTrendsCard(
     val textColor = MaterialTheme.colorScheme.onSurfaceVariant
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp)) // Clip shape for ripple effect
+            .clickable { onClick() },
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = cardBg),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
@@ -106,7 +114,8 @@ fun SpendingTrendsCard(
 @Composable
 fun CategoryBreakdownCard(
     breakdown: List<CategoryUiData>,
-    totalFormatted: String
+    totalFormatted: String,
+    onClick: () -> Unit
 ) {
     val themePalette = listOf(
         MaterialTheme.colorScheme.primary,
@@ -118,7 +127,9 @@ fun CategoryBreakdownCard(
     )
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp))
+            .clickable { onClick() },
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)

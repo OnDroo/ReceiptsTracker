@@ -9,7 +9,6 @@ import link.ondrov.receipts.data.model.ReceiptWithDetails
 
 @Dao
 interface ReceiptDao {
-    // Return your specific wrapper class
     @Transaction
     @Query("SELECT * FROM receipts ORDER BY dateTimestamp DESC")
     fun getAllReceipts(): Flow<List<ReceiptWithDetails>>
@@ -21,8 +20,14 @@ interface ReceiptDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertReceipt(receipt: Receipt)
 
+    @Update
+    suspend fun updateReceipt(receipt: Receipt)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertItems(items: List<ReceiptItem>)
+
+    @Query("DELETE FROM receipt_items WHERE receiptId = :receiptId")
+    suspend fun deleteItemsByReceiptId(receiptId: String)
 
     // Categories
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -37,6 +42,12 @@ interface ReceiptDao {
     @Transaction
     suspend fun insertReceiptWithItems(receipt: Receipt, items: List<ReceiptItem>) {
         insertReceipt(receipt)
+        insertItems(items)
+    }
+
+    @Transaction
+    suspend fun replaceItems(receiptId: String, items: List<ReceiptItem>) {
+        deleteItemsByReceiptId(receiptId)
         insertItems(items)
     }
 }

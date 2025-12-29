@@ -11,18 +11,19 @@ import link.ondrov.receipts.data.model.ReceiptItem
  * This acts as the "contract" for your ViewModels.
  */
 interface ReceiptRepository {
-
-    /**
-     * Get all receipts as a Flow, so the UI can update automatically.
-     */
+    // Basic Receipt CRUD
     fun getAllReceipts(): Flow<List<ReceiptWithDetails>>
-
-    /**
-     * Get a single receipt by its ID as a Flow.
-     */
     fun getReceiptById(id: String): Flow<ReceiptWithDetails?>
 
+    // Create
     suspend fun saveReceipt(receipt: Receipt, items: List<ReceiptItem>)
+
+    // Update
+    suspend fun updateReceipt(receipt: Receipt, items: List<ReceiptItem>)
+
+    // Delete
     suspend fun deleteReceipt(receipt: Receipt)
+
+    // Category Management
     fun getAllCategories(): Flow<List<Category>>
 }
