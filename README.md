@@ -4,7 +4,7 @@
 
 ## Features
 
-*   **Receipt Management**: Store and organize all your receipts in one place.
+*   **Receipt Management**: Store and organize all your receipts in one place. Simply scan the receipt, and the app will handle the rest!
 *   **AI-Powered Search**: Utilize full-text search to find receipts based on items, merchants, or dates, powered by Google's Gemini API.
 *   **Customizable Settings**:
     *   Set your preferred currency (EUR, USD, etc.).
@@ -12,9 +12,9 @@
 
 ## Screenshots
 
-| Dashboard | Search | Receipt Details |
-|:---:|:---:|:---:|
-| <img src="screenshots/dashboard.png" width="250" alt="Dashboard Screenshot" /> | <img src="screenshots/search.png" width="250" alt="Search Screenshot" /> | <img src="screenshots/details.png" width="250" alt="Receipt Details Screenshot" /> |
+| Dashboard | Search | Receipt Details | Scanner |
+|:---:|:---:|:---:|:---:|
+| <img src="screenshots/dashboard.png" width="200" alt="Dashboard Screenshot" /> | <img src="screenshots/search.png" width="200" alt="Search Screenshot" /> | <img src="screenshots/details.png" width="200" alt="Receipt Details Screenshot" /> | <img src="screenshots/scanner.png" width="200" alt="Scanner Screenshot" /> |
 
 
 
@@ -35,5 +35,5 @@ This application requires a Google Gemini API Key to perform full-text searches 
 
 ## Built With
 *   [Kotlin](https://kotlinlang.org/)
-*   [Jetpack Compose](https://developer.android.com/jetpack/compose)
+*   [Jetpack Compose](https://developer.android.com/jetpack/compose) Material 3 Expressive
 *   [Google Gemini API](https://ai.google.dev/)
