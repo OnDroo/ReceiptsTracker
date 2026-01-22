@@ -37,6 +37,3 @@ This application requires a Google Gemini API Key to perform full-text searches 
 *   [Kotlin](https://kotlinlang.org/)
 *   [Jetpack Compose](https://developer.android.com/jetpack/compose)
 *   [Google Gemini API](https://ai.google.dev/)
-
-## License
-[Add License Here]
