@@ -59,11 +59,15 @@ class GeminiRepository(
                     val name = model.name.lowercase()
                     val isGenerative = model.supportedGenerationMethods?.contains("generateContent") == true
                     val isGemini = name.contains("gemini")
-                    val isFreeTierEligible = name.contains("flash") || name.contains("pro")
+                    val isFreeTierEligible = name.contains("flash") || name.contains("pro") || name.contains("hydrogen")
                     isGenerative && isGemini && isFreeTierEligible
                 }
                 .map { it.name.removePrefix("models/") }
-                .sortedWith(compareByDescending<String> { it.contains("flash") }.thenByDescending { it })
+                .sortedWith(
+                    compareByDescending<String> { it.contains("hydrogen") }
+                        .thenByDescending { it.contains("flash") }
+                        .thenByDescending { it }
+                )
         } catch (e: Exception) {
             e.printStackTrace()
             return emptyList()

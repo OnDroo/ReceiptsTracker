@@ -35,7 +35,7 @@ class SettingsViewModel(
     val availableModels = _availableModels.asStateFlow()
 
     val selectedModel: StateFlow<String> = settingsRepository.selectedModel
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "gemini-flash-latest")
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "gemini-4-hydrogen")
 
 
     // --- 3. ACTIONS ---

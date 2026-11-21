@@ -29,9 +29,8 @@ class SettingsRepository(private val context: Context) {
     val currency: Flow<String> = context.dataStore.data
         .map { preferences -> preferences[Keys.CURRENCY] ?: "EUR" }
 
-    // Default to Flash 2.5 as it is the current speed/cost leader
     val selectedModel: Flow<String> = context.dataStore.data
-        .map { preferences -> preferences[Keys.GEMINI_MODEL] ?: "gemini-2.5-flash" }
+        .map { preferences -> preferences[Keys.GEMINI_MODEL] ?: "gemini-4-hydrogen" }
 
     // --- WRITE DATA ---
 
